@@ -1,0 +1,15 @@
+/.idea
+*.log
+*.DS_Store
+
+# Java
+/yshop-drink-boot3/**/target/
+
+# Node
+/yshop-drink-vue3/node_modules/
+/yshop-drink-uniapp-vue3/node_modules/
+
+# 前端构建产物
+/yshop-drink-vue3/dist/
+/yshop-drink-uniapp-vue3/unpackage/
+/yshop-drink-uniapp-vue3/.hbuilderx/
