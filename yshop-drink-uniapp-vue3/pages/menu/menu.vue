@@ -146,7 +146,7 @@
 							<view class="tips flex justify-between">{{ good.storeInfo }}</view>
 						</view>
 						<view class="properties">
-							<view class="property" v-for="(item, index) in good.productAttr" :key="index">
+							<view class="property" v-for="(item, index) in (good.productAttr || [])" :key="index">
 								<view class="title">
 									<text class="name">{{ item.attrName }}</text>
 								</view>
@@ -158,6 +158,22 @@
 									</view>
 								</view>
 							</view>
+							<template v-if="drinkExtraGroups.length">
+								<view class="property drink-extra" v-for="(group, gi) in drinkExtraGroups"
+									:key="group.key">
+									<view class="title">
+										<text class="name">{{ group.name }}</text>
+										<text class="desc optional-hint">必选</text>
+									</view>
+									<view class="values">
+										<view class="value" v-for="(opt, oi) in group.options" :key="oi"
+											:class="{'default': extraPick[gi] === oi}"
+											@tap="changeExtraPick(gi, oi)">
+											{{ opt }}
+										</view>
+									</view>
+								</view>
+							</template>
 						</view>
 					</view>
 				</scroll-view>
@@ -165,7 +181,8 @@
 					<view class="left">
 						<view class="price">￥{{ good.price }}</view>
 						<view class="props">
-							{{ good.valueStr }}
+							<view class="props-line" v-if="!isTrivialProductSku(good.valueStr)">{{ good.valueStr }}</view>
+							<view v-if="extraAddonDisplay" class="props-addon">{{ extraAddonDisplay }}</view>
 						</view>
 					</view>
 					<view class="btn-group">
@@ -197,7 +214,10 @@
 					   <view class="item" v-for="(item, index) in cart" :key="index">
 						<view class="left">
 						 <view class="name">{{ item.name }}</view>
-						 <view class="props">{{ item.valueStr }}</view>
+						 <view class="props">
+						 	<view class="props-line" v-if="!isTrivialProductSku(item.valueStr)">{{ item.valueStr }}</view>
+						 	<view v-if="item.specAddon" class="props-addon">{{ item.specAddon }}</view>
+						 </view>
 						</view>
 						<view class="center">
 						 <text>￥{{ item.price }}</text>
@@ -242,7 +262,7 @@ import {
 import { useMainStore } from '@/store/store'
 import { storeToRefs } from 'pinia'
 import { onLoad,onShow ,onPullDownRefresh,onHide,onUnload} from '@dcloudio/uni-app'
-import { formatDateTime,kmUnit } from '@/utils/util'
+import { formatDateTime, kmUnit, isTrivialProductSku } from '@/utils/util'
 import {
   shopNearby,
   menuGoods
@@ -250,6 +270,7 @@ import {
 import {
   menuAds
 } from '@/api/market'
+import { getDictDataByType } from '@/api/dict'
 const main = useMainStore()
 const { orderType,address, store,location,isLogin } = storeToRefs(main)
 const title = ref('点餐')
@@ -268,6 +289,100 @@ const category = ref({})
 const cartPopupVisible = ref(false)
 const sizeCalcState = ref(false)
 const newValue = ref([])
+/**
+ * 附加规格字典（不参与 SKU，仅 specAddon）：
+ * 1）推荐：mall_drink_extra_group 中每行 label=分组名、value=子字典类型（如 mall_drink_extra_spicy），选项写在子类型下。
+ * 2）简化：若分组无数据，则直接读 mall_drink_extra 整表作为单一分组「辣度」。
+ */
+const EXTRA_GROUP_DICT_TYPE = 'mall_drink_extra_group'
+const EXTRA_FLAT_FALLBACK_TYPE = 'mall_drink_extra'
+const drinkExtraGroups = ref([])
+const extraPick = ref([])
+
+const loadDrinkExtraDicts = async () => {
+	try {
+		const meta = await getDictDataByType(EXTRA_GROUP_DICT_TYPE)
+		const built = []
+		if (Array.isArray(meta) && meta.length > 0) {
+			for (const row of meta) {
+				const childType = (row.value || '').toString().trim()
+				if (!childType) continue
+				let opts = []
+				try {
+					const list = await getDictDataByType(childType)
+					if (Array.isArray(list) && list.length) {
+						opts = list.map((o) => (o.label != null ? String(o.label) : '')).filter(Boolean)
+					}
+				} catch (e) {
+					console.warn('[drinkExtra] child dict', childType, e)
+				}
+				if (!opts.length) continue
+				const name = (row.label || '').toString().trim() || childType
+				built.push({ key: childType, name, options: opts })
+			}
+		}
+		if (!built.length) {
+			try {
+				const flat = await getDictDataByType(EXTRA_FLAT_FALLBACK_TYPE)
+				if (Array.isArray(flat) && flat.length) {
+					const opts = flat.map((o) => (o.label != null ? String(o.label) : '')).filter(Boolean)
+					if (opts.length) {
+						built.push({
+							key: EXTRA_FLAT_FALLBACK_TYPE,
+							name: '辣度',
+							options: opts
+						})
+					}
+				}
+			} catch (e) {
+				console.warn('[drinkExtra] flat dict', EXTRA_FLAT_FALLBACK_TYPE, e)
+			}
+		}
+		drinkExtraGroups.value = built
+		resetExtraPick()
+	} catch (e) {
+		console.warn('[drinkExtra] group dict', e)
+		drinkExtraGroups.value = []
+		extraPick.value = []
+	}
+}
+
+const resetExtraPick = () => {
+	const g = drinkExtraGroups.value
+	if (!g.length) {
+		extraPick.value = []
+		return
+	}
+	extraPick.value = g.map((row) => {
+		const bu = row.options.findIndex((o) => o === '不辣')
+		if (bu >= 0) return bu
+		const ni = row.options.findIndex(
+			(o) => o === '正常' || o === '正常冰' || (o.includes('正常') && !o.includes('不辣'))
+		)
+		if (ni >= 0) return ni
+		return 0
+	})
+}
+
+const changeExtraPick = (groupIndex, optionIndex) => {
+	const g = drinkExtraGroups.value[groupIndex]
+	if (!g || optionIndex < 0 || optionIndex >= g.options.length) return
+	const next = extraPick.value.slice()
+	next[groupIndex] = optionIndex
+	extraPick.value = next
+}
+
+const extraAddonDisplay = computed(() => {
+	const g = drinkExtraGroups.value
+	const parts = []
+	for (let i = 0; i < g.length; i++) {
+		const idx = extraPick.value[i]
+		const opt = g[i].options[idx]
+		if (opt) parts.push(`${g[i].name}:${opt}`)
+	}
+	return parts.join('、')
+})
+
 const shopAd = ref('')
 const isCartShow = ref(true)
 const popup = ref()
@@ -314,6 +429,7 @@ const spread = computed(() => { //差多少元起送
 uni.$on('refreshMenu', () => {
 	// 在这里执行onLoad逻辑
 	console.log('refreshMenu1:',store.value.id)
+	loadDrinkExtraDicts()
 	init()
 })
 uni.$on('cartChanged', () => {
@@ -321,9 +437,11 @@ uni.$on('cartChanged', () => {
 })
 
 onPullDownRefresh(() => {
+	loadDrinkExtraDicts()
 	init()
 })
 onLoad(() => {
+	loadDrinkExtraDicts()
 	init();
 	refreshCart()
 })
@@ -546,13 +664,14 @@ const calcSize = () => {
 	sizeCalcState.value = true
 }
 const handleAddToCart = (cate, newGood, num) =>{ //添加到购物车
-	const currentSpec = (good.value.valueStr || newGood.valueStr || '默认').toString()
+	const currentSpec = (newGood.valueStr || good.value.valueStr || '默认').toString()
+	const addon = (newGood.specAddon || '').toString()
 	const index = cart.value.findIndex(item => {
 		if (newGood) {
-			return (item.id === newGood.id) && (item.valueStr === currentSpec)
-		} else {
-			return item.id === newGood.id
+			return (item.id === newGood.id) && (item.valueStr === currentSpec) &&
+				((item.specAddon || '') === addon)
 		}
+		return item.id === newGood.id
 	})
 	if (index > -1) {
 		cart.value[index].number += num
@@ -564,7 +683,8 @@ const handleAddToCart = (cate, newGood, num) =>{ //添加到购物车
 			price: newGood.price,
 			number: num,
 			image: newGood.image,
-			valueStr: currentSpec
+			valueStr: currentSpec,
+			specAddon: addon
 		})
 	}
 	saveCartToStorage()
@@ -585,7 +705,7 @@ const showGoodDetailModal = (item, newGood) => {
 	}))
 	category.value = JSON.parse(JSON.stringify(item))
 	goodDetailModalVisible.value = true;
-	console.log('goodDetailModalVisible:',goodDetailModalVisible.value)
+	resetExtraPick()
 	changePropertyDefault(0, 0,true);
 }
 const closeGoodDetailModal = () => { //关闭饮品详情模态框
@@ -595,38 +715,40 @@ const closeGoodDetailModal = () => { //关闭饮品详情模态框
 }
 const changePropertyDefault = (index, key, isDefault) => { //改变默认属性值
 	let valueStr = ''
-	console.log('good:',good.value)
-	if(isDefault){
+	const attrs = good.value.productAttr || []
+	if (isDefault) {
 		newValue.value = []
-		for(let i = 0;i < good.value.productAttr.length;i++){
-			newValue.value[i] = good.value.productAttr[i].attrValueArr[0]
+		for (let i = 0; i < attrs.length; i++) {
+			newValue.value[i] = attrs[i].attrValueArr[0]
 		}
-
-		//valueStr = newValue.value.join(',')
-
-	}else{
-		newValue.value[index] = good.value.productAttr[index].attrValueArr[key]
-		//valueStr = newValue.value.join(',')
+	} else {
+		newValue.value[index] = attrs[index].attrValueArr[key]
 	}
-	
+
 	valueStr = newValue.value.join(',')
-	let productValue = good.value.productValue[valueStr]
-	if(!productValue) {
-		let skukey = JSON.parse(JSON.stringify(newValue.value))
+	let productValue = good.value.productValue ? good.value.productValue[valueStr] : null
+	if (!productValue && good.value.productValue) {
+		const skukey = JSON.parse(JSON.stringify(newValue.value))
 		skukey.sort((a, b) => a.localeCompare(b))
-		//console.log('skukey:',skukey)
 		valueStr = skukey.join(',')
 		productValue = good.value.productValue[valueStr]
 	}
+	if (!productValue && good.value.productValue) {
+		const keys = Object.keys(good.value.productValue)
+		if (keys.length) {
+			valueStr = keys[0]
+			productValue = good.value.productValue[valueStr]
+		}
+	}
+	if (!productValue) {
+		return
+	}
 
-	
-	//let productValue = good.value.productValue[valueStr]
-	good.value.number = 1;
-	good.value.price = parseFloat(productValue.price).toFixed(2);
-	good.value.stock = productValue.stock;
-	good.value.image = productValue.image ? productValue.image : good.value.image;
+	good.value.number = 1
+	good.value.price = parseFloat(productValue.price).toFixed(2)
+	good.value.stock = productValue.stock
+	good.value.image = productValue.image ? productValue.image : good.value.image
 	good.value.valueStr = valueStr
-
 }
 const handlePropertyAdd = () => {
 	good.value.number += 1
@@ -640,6 +762,34 @@ const handleAddToCartInModal = () => {
 		uToast.value.show({message:'商品库存不足',type: 'error'});
 		return;
 	}
+	const attrs = good.value.productAttr || []
+	if (attrs.length > 0) {
+		for (let i = 0; i < attrs.length; i++) {
+			const v = newValue.value[i]
+			if (v === undefined || v === null || v === '') {
+				uToast.value.show({
+					message: `请选择：${attrs[i].attrName}`,
+					type: 'error'
+				})
+				return
+			}
+		}
+	}
+	const exGroups = drinkExtraGroups.value
+	if (exGroups.length) {
+		for (let i = 0; i < exGroups.length; i++) {
+			const idx = extraPick.value[i]
+			const opts = exGroups[i].options
+			if (idx == null || idx < 0 || idx >= opts.length) {
+				uToast.value.show({
+					message: `请选择：${exGroups[i].name}`,
+					type: 'error'
+				})
+				return
+			}
+		}
+	}
+	good.value.specAddon = extraAddonDisplay.value
 	handleAddToCart(category.value, good.value, good.value.number)
 	closeGoodDetailModal()
 }
@@ -1214,12 +1364,21 @@ const saveCartToStorage = () => {
 				}
 	
 				.props {
-					color: $text-color-assist;
-					font-size: 24rpx;
 					width: 100%;
-					overflow: hidden;
-					text-overflow: ellipsis;
-					white-space: nowrap;
+					.props-line {
+						color: $text-color-assist;
+						font-size: 24rpx;
+						overflow: hidden;
+						text-overflow: ellipsis;
+						white-space: nowrap;
+					}
+					.props-addon {
+						color: $text-color-assist;
+						font-size: 22rpx;
+						margin-top: 4rpx;
+						line-height: 1.35;
+						white-space: normal;
+					}
 				}
 			}
 			.btn-group {
@@ -1376,11 +1535,20 @@ const saveCartToStorage = () => {
 							color: $text-color-base;
 						}
 						.props {
-							color: $text-color-assist;
-							font-size: 24rpx;
-							overflow: hidden;
-							text-overflow: ellipsis;
-							white-space: nowrap;
+							.props-line {
+								color: $text-color-assist;
+								font-size: 24rpx;
+								overflow: hidden;
+								text-overflow: ellipsis;
+								white-space: nowrap;
+							}
+							.props-addon {
+								color: $text-color-assist;
+								font-size: 22rpx;
+								margin-top: 4rpx;
+								line-height: 1.35;
+								white-space: normal;
+							}
 						}
 					}
 	

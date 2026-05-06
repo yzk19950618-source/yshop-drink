@@ -28,14 +28,6 @@
 				</button>
 				<!-- #endif -->
 			</view>
-			<view class="hint">
-			<!-- 	<label class="label"> -->
-					<radio value="isChecked" @tap.stop="onChange" />
-					我已经阅读并遵守
-					<text class="link" @tap="serv(29,'用户协议')">《用户协议》</text>与
-						<text class="link"  @tap="serv(30,'隐私政策')">《隐私政策》</text>
-			<!-- 	</label> -->
-			</view>
 		</view>
 		<uv-toast ref="uToast"></uv-toast>
 	</view>
@@ -43,11 +35,8 @@
 </template>
 
 <script setup>
-import {
-  ref,
-  computed
-} from 'vue'
-import { onLoad,onShow } from '@dcloudio/uni-app'
+import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { useMainStore } from '@/store/store'
 import {
   userAuthSession,
@@ -65,7 +54,6 @@ const main = useMainStore()
 const title = ref('登录')
 const mobile = ref('')
 const addressText = ref('')
-const isChecked = ref(false)
 const openid = ref(main.openid)
 const uToast = ref()
 
@@ -99,13 +87,6 @@ const wechatMiniLogin = () => {
 
 
 const loginForWechatMini = async (e) => {
-	if(!isChecked.value){
-		uToast.value.show({
-			message: '请勾选下面协议',
-			type: 'error'
-		});
-		return
-	}
 	if (e.detail.encryptedData && e.detail.iv) {
 		let data = await userLoginForWechatMini({
 			encryptedData: e.detail.encryptedData,
@@ -139,14 +120,6 @@ const submit = () => {
 	if(!addressText.value || !addressText.value.trim()){
 		uToast.value.show({
 			message: '请输入收货地址',
-			type: 'error'
-		});
-		return
-	}
-	
-	if(!isChecked.value){
-		uToast.value.show({
-			message: '请勾选下面协议',
 			type: 'error'
 		});
 		return
@@ -232,16 +205,6 @@ const dataSafeName = () => {
 	return `用户${tail}`
 }
 
-const serv = (id,name) => {
-	uni.navigateTo({
-			url: '/pages/components/pages/mine/content?id=' + id + '&name=' + name
-	})
-}
-
-const onChange = () => {
-	isChecked.value = !isChecked.value
-}
-
 </script>
 
 <style lang="scss" scoped>
@@ -325,19 +288,6 @@ const onChange = () => {
 					margin-right: 10rpx;
 					vertical-align: middle;
 				}
-			}
-		}
-		
-		.hint {
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			padding: 20rpx 40rpx;
-			font-size: 20rpx;
-			color: $uv-tips-color;
-			
-			.link {
-				color: $uv-warning;
 			}
 		}
 	}

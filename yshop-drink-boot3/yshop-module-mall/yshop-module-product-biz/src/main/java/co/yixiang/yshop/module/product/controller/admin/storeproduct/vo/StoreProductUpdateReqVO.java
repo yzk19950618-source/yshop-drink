@@ -18,8 +18,7 @@ public class StoreProductUpdateReqVO extends StoreProductBaseVO {
     @NotNull(message = "商品id不能为空")
     private Long id;
 
-    @Schema(description = "轮播图", required = true)
-    @NotNull(message = "轮播图不能为空")
+    @Schema(description = "轮播图")
     private String sliderImage;
 
     @Schema(description = "商品简介", required = true)

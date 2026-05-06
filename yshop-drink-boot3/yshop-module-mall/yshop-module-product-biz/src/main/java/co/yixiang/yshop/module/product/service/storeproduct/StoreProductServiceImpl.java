@@ -456,14 +456,11 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
     @Transactional(rollbackFor = Exception.class)
     public void insertAndEditYxStoreProduct(StoreProductDto storeProductDto) {
         //storeProductDto.setDescription(RegexUtil.converProductDescription(storeProductDto.getDescription()));
-        ProductResultDto resultDTO = this.computedProduct(storeProductDto.getAttrs());
+        ProductResultDto resultDTO = this.computedProduct(storeProductDto.getAttrs(), storeProductDto.getStock());
 
         //添加商品
         StoreProductDO yxStoreProduct = new StoreProductDO();
         BeanUtil.copyProperties(storeProductDto, yxStoreProduct, "sliderImage");
-        if (storeProductDto.getSliderImage().isEmpty()) {
-            throw exception(STORE_PRODUCT_SLIDER_ERROR);
-        }
         StoreShopDO storeShopDO = storeShopMapper.selectById(storeProductDto.getShopId());
         yxStoreProduct.setShopName(storeShopDO.getName());
         yxStoreProduct.setPrice(BigDecimal.valueOf(resultDTO.getMinPrice()));
@@ -471,7 +468,8 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
         yxStoreProduct.setCost(BigDecimal.valueOf(resultDTO.getMinCost()));
         yxStoreProduct.setIntegral(resultDTO.getMinIntegral());
         yxStoreProduct.setStock(resultDTO.getStock());
-        yxStoreProduct.setSliderImage(String.join(",", storeProductDto.getSliderImage()));
+        List<String> sliderList = CollUtil.emptyIfNull(storeProductDto.getSliderImage());
+        yxStoreProduct.setSliderImage(CollUtil.isEmpty(sliderList) ? "" : String.join(",", sliderList));
 
 
         this.saveOrUpdate(yxStoreProduct);
@@ -627,45 +625,69 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
 
 
     /**
+     * 多规格时：若规格表里各 SKU 库存之和为 0，但「基本信息」里填写了总库存 parentStock，
+     * 则按总库存平均分配到各 SKU（余数依次加在前几行），避免只填了主库存却保存失败。
+     */
+    private static int nonNegStock(Integer v) {
+        return v == null || v < 0 ? 0 : v;
+    }
+
+    private static void distributeSkuStocksFromPool(List<ProductFormatDto> attrs, int totalPool) {
+        if (CollUtil.isEmpty(attrs) || totalPool <= 0) {
+            return;
+        }
+        int n = attrs.size();
+        int base = totalPool / n;
+        int rem = totalPool % n;
+        for (int i = 0; i < n; i++) {
+            int cell = base + (i < rem ? 1 : 0);
+            attrs.get(i).setStock(cell);
+        }
+    }
+
+    /**
      * 计算产品数据
      *
-     * @param attrs attrs
+     * @param attrs         规格行（多规格时每行一个 SKU）
+     * @param parentStock   基本信息中的总库存（可为 null）
      * @return ProductResultDto
      */
-    private ProductResultDto computedProduct(List<ProductFormatDto> attrs) {
+    private ProductResultDto computedProduct(List<ProductFormatDto> attrs, Long parentStock) {
+        List<ProductFormatDto> safeAttrs = CollUtil.emptyIfNull(attrs);
         //取最小价格
-        Double minPrice = attrs
+        Double minPrice = safeAttrs
                 .stream()
                 .map(ProductFormatDto::getPrice)
                 .min(Comparator.naturalOrder())
                 .orElse(0d);
 
         //取最小积分
-        Integer minIntegral = attrs
+        Integer minIntegral = safeAttrs
                 .stream()
                 .map(ProductFormatDto::getIntegral)
                 .min(Comparator.naturalOrder())
                 .orElse(0);
 
-        Double minOtPrice = attrs
+        Double minOtPrice = safeAttrs
                 .stream()
                 .map(ProductFormatDto::getOtPrice)
                 .min(Comparator.naturalOrder())
                 .orElse(0d);
 
-        Double minCost = attrs
+        Double minCost = safeAttrs
                 .stream()
                 .map(ProductFormatDto::getCost)
                 .min(Comparator.naturalOrder())
                 .orElse(0d);
-        //计算库存
-        Integer stock = attrs
-                .stream()
-                .map(ProductFormatDto::getStock)
-                .reduce(Integer::sum)
-                .orElse(0);
+        //计算库存（各 SKU 之和）
+        int sumStock = safeAttrs.stream().mapToInt(a -> nonNegStock(a.getStock())).sum();
+        if (sumStock <= 0 && CollUtil.isNotEmpty(safeAttrs) && parentStock != null && parentStock > 0) {
+            int pool = parentStock > Integer.MAX_VALUE ? Integer.MAX_VALUE : parentStock.intValue();
+            distributeSkuStocksFromPool(safeAttrs, pool);
+            sumStock = safeAttrs.stream().mapToInt(a -> nonNegStock(a.getStock())).sum();
+        }
 
-        if (stock <= 0) {
+        if (sumStock <= 0) {
             throw exception(STORE_PRODUCT_STOCK_ERROR);
         }
 
@@ -673,7 +695,7 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
                 .minPrice(minPrice)
                 .minOtPrice(minOtPrice)
                 .minCost(minCost)
-                .stock(stock)
+                .stock(sumStock)
                 .minIntegral(minIntegral)
                 .build();
     }

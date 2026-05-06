@@ -68,7 +68,7 @@ import {
 } from 'vue'
 import { useMainStore } from '@/store/store'
 import { storeToRefs } from 'pinia'
-import { onLoad,onPullDownRefresh,onReachBottom} from '@dcloudio/uni-app'
+import { onLoad, onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { formatDateTime,kmUnit } from '@/utils/util'
 import {
   orderGetOrders,
@@ -109,10 +109,15 @@ const goodsNum = computed(() => { //计算单个饮品添加到购物车的数�
 	}
 })
 onLoad(() => {
-	if(!isLogin.value) {
-		uni.navigateTo({url: '/pages/components/pages/login/login'})
+	if (!isLogin.value) {
+		uni.navigateTo({ url: '/pages/components/pages/login/login' })
 	}
-	getOrders(false)
+})
+onShow(() => {
+	if (!isLogin.value) {
+		return
+	}
+	getOrders(true)
 })
 onPullDownRefresh(() => {
 	 getOrders(false)
@@ -152,9 +157,10 @@ const detail = (id) => {
 	})
 }
 // 确认收到货
-const receive  = async(order) => {
-	let data = await orderReceive({uni:order.orderId});
+const receive = async (orderItem) => {
+	const data = await orderReceive({ uni: orderItem.orderId })
 	if (data) {
+		uni.showToast({ title: '已确认收到', icon: 'success' })
 		await getOrders(true)
 	}
 }

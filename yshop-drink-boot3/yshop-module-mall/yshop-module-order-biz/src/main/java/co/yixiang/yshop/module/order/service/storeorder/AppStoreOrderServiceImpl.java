@@ -354,7 +354,8 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
 
 
         //保存购物车商品信息，异步执行
-        storeOrderCartInfoService.saveCartInfo(storeOrder.getId(), storeOrder.getOrderId(),productIds,numbers,specs);
+        storeOrderCartInfoService.saveCartInfo(storeOrder.getId(), storeOrder.getOrderId(), productIds, numbers,
+                specs, param.getSpecAddon());
 
         ////todo 桌面点餐功能 商业版本才有 官网地址：https://www.yixiang.co异步更新桌面信息
 
@@ -677,11 +678,12 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
                         .eq(StoreOrderDO::getRefundStatus, OrderInfoEnum.REFUND_STATUS_0.getValue())
                         .eq(StoreOrderDO::getStatus, OrderInfoEnum.STATUS_0.getValue());
                 break;
-            //已经支付
+            // 已支付且未完结：小程序「进行中」= 制作中(status0) + 已出单/待取餐/配送中(status1)
             case STATUS_1:
                 wrapper.eq(StoreOrderDO::getPaid, OrderInfoEnum.PAY_STATUS_1.getValue())
                         .eq(StoreOrderDO::getRefundStatus, OrderInfoEnum.REFUND_STATUS_0.getValue())
-                        .eq(StoreOrderDO::getStatus, OrderInfoEnum.STATUS_0.getValue());
+                        .in(StoreOrderDO::getStatus,
+                                Arrays.asList(OrderInfoEnum.STATUS_0.getValue(), OrderInfoEnum.STATUS_1.getValue()));
                 break;
             //待收货
             case STATUS_2:

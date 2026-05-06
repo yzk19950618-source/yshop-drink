@@ -107,7 +107,9 @@
 									<view>￥{{ item.price }}</view>
 								</view>
 							</view>
-							<view class="text-truncate font-size-base text-color-assist">{{ item.valueStr }}</view>
+							<view v-if="!isTrivialProductSku(item.valueStr)" class="text-truncate font-size-base text-color-assist">{{ item.valueStr }}</view>
+							<view v-if="item.specAddon" class="font-size-sm text-color-assist mt-10"
+								style="white-space: normal;">{{ item.specAddon }}</view>
 						</view>
 					</list-cell>
 				</view>
@@ -226,6 +228,7 @@ import { useMainStore } from '@/store/store'
 import { storeToRefs } from 'pinia'
 import { onLoad,onShow ,onPullDownRefresh,onHide} from '@dcloudio/uni-app'
 import  debounce  from '@/uni_modules/uv-ui-tools/libs/function/debounce'
+import { isTrivialProductSku } from '@/utils/util'
 
 import {
   orderSubmit,
@@ -503,6 +506,7 @@ const pay = async() => {
 			remark: form.value.remark, // 备注
 			productId: [],
 			spec: [],
+			specAddon: [],
 			number: [],
 			couponId: coupon.value.id ? coupon.value.id : 0 // 优惠券id
 		};
@@ -512,6 +516,7 @@ const pay = async() => {
 			const rawSpec = (item.valueStr || item.attrValue || '').toString().trim();
 			// Keep single-SKU "默认" so backend can match SKU consistently.
 			data.spec.push(rawSpec.replace(/,/g, '|'));
+			data.specAddon.push((item.specAddon || '').toString().trim());
 			data.number.push(item.number);
 		});
 

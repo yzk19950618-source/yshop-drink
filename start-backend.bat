@@ -1,4 +1,5 @@
 @echo off
+REM Use ASCII only in this file. UTF-8 Chinese breaks cmd.exe line parsing on some Windows locales.
 setlocal
 set "ROOT=%~dp0"
 set "BOOT3_DIR=%ROOT%yshop-drink-boot3"
@@ -17,10 +18,10 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr /R /C:":48081 .*LISTENING"') 
 cd /d "%BOOT3_DIR%"
 echo [BACKEND] cwd: %cd%
 
-REM 说明：
-REM   无参数     = 每次先执行 mvn package（增量），再启动，避免一直用旧 jar 导致配置/静态资源/安全类未更新（此前 401、界面异常多缘于此）
-REM   fast      = 若已存在 yshop-server.jar 则跳过编译（仅改前端或确认无需改 jar 时用）
-REM   rebuild   = mvn clean package 全量重编后再启动
+REM Args:
+REM   (none)   = mvn package (incremental; no clean). Rebuilds only changed modules.
+REM   fast     = skip Maven if jar exists (use when only frontend changed).
+REM   rebuild  = mvn clean package then start (full rebuild).
 if /I "%REBUILD%"=="rebuild" goto BUILD_CLEAN
 if /I "%REBUILD%"=="fast" (
   if exist "%JAR%" goto RUN
@@ -34,7 +35,7 @@ where mvn >nul 2>nul || (
   pause
   exit /b 1
 )
-echo [BACKEND] clean ^+ package server jar...
+echo [BACKEND] clean + package server jar...
 call mvn -pl yshop-server -am -DskipTests clean package
 if errorlevel 1 (
   echo [BACKEND][ERROR] build failed.
@@ -49,7 +50,7 @@ where mvn >nul 2>nul || (
   pause
   exit /b 1
 )
-echo [BACKEND] incremental package server jar...
+echo [BACKEND] incremental package server jar (mvn package, not clean)...
 call mvn -pl yshop-server -am -DskipTests package
 if errorlevel 1 (
   echo [BACKEND][ERROR] build failed.

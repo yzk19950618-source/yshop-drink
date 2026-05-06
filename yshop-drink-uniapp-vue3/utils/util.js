@@ -160,3 +160,16 @@ export function parseQuery() {
   }
   
 
+/** 单规格 SKU 为「默认」「default」时，展示订单/行项目 spec 时去掉前缀，如 "默认|辣度:重辣" -> "辣度:重辣" */
+export function formatProductSpecDisplay(spec) {
+	const s = (spec == null ? '' : String(spec)).trim()
+	if (!s) return ''
+	return s.replace(/^(默认|default)\s*\|\s*/i, '').trim()
+}
+
+/** 购物车 valueStr 是否为占位单规格（不单独占一行展示） */
+export function isTrivialProductSku(valueStr) {
+	const t = (valueStr == null ? '' : String(valueStr)).trim()
+	return !t || /^默认$/i.test(t) || /^default$/i.test(t)
+}
+

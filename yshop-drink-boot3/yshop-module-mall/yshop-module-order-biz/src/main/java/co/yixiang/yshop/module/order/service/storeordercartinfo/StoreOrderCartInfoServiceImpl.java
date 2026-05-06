@@ -13,10 +13,10 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -44,20 +44,34 @@ public class StoreOrderCartInfoServiceImpl extends ServiceImpl<StoreOrderCartInf
      * @param numbers 商品数量
      * @param specs 商品规格
      */
-    @Async
     @Override
-    public void saveCartInfo(Long oid, String orderId, List<String> productIds,List<String> numbers,List<String> specs) {
+    public void saveCartInfo(Long oid, String orderId, List<String> productIds, List<String> numbers,
+                             List<String> specs, List<String> specAddons) {
         log.info("==========添加购物车商品信息start===========");
 
         List<StoreOrderCartInfoDO> list = new ArrayList<>();
-        for (int i = 0;i < productIds.size();i++){
-            String newSku = StrUtil.replace(specs.get(i),"|",",");
+        for (int i = 0; i < productIds.size(); i++) {
+            String newSku = StrUtil.replace(specs.get(i), "|", ",");
             StoreProductDO storeProductDO = appStoreProductService.getById(productIds.get(i));
+            if (storeProductDO == null) {
+                log.error("[saveCartInfo][商品不存在 productId={}]", productIds.get(i));
+                continue;
+            }
 
             StoreProductAttrValueDO storeProductAttrValue = storeProductAttrValueService
                     .getOne(Wrappers.<StoreProductAttrValueDO>lambdaQuery()
                             .eq(StoreProductAttrValueDO::getSku, newSku)
                             .eq(StoreProductAttrValueDO::getProductId, productIds.get(i)));
+            BigDecimal linePrice = storeProductAttrValue != null ? storeProductAttrValue.getPrice()
+                    : storeProductDO.getPrice();
+            if (storeProductAttrValue == null) {
+                log.warn("[saveCartInfo][未匹配 SKU，使用商品原价 oid={} productId={} sku={}]",
+                        oid, productIds.get(i), newSku);
+            }
+            if (linePrice == null) {
+                linePrice = BigDecimal.ZERO;
+            }
+
             StoreOrderCartInfoDO info = new StoreOrderCartInfoDO();
             info.setOid(oid);
             info.setOrderId(orderId);
@@ -69,13 +83,22 @@ public class StoreOrderCartInfoServiceImpl extends ServiceImpl<StoreOrderCartInf
             info.setTitle(storeProductDO.getStoreName());
             info.setImage(storeProductDO.getImage());
             info.setNumber(Integer.valueOf(numbers.get(i)));
-            info.setSpec(specs.get(i));
-            info.setPrice(storeProductAttrValue.getPrice());
+            String displaySpec = specs.get(i);
+            if (specAddons != null && i < specAddons.size()) {
+                String addon = specAddons.get(i);
+                if (StrUtil.isNotBlank(addon)) {
+                    displaySpec = displaySpec + " | " + addon;
+                }
+            }
+            info.setSpec(displaySpec);
+            info.setPrice(linePrice);
             list.add(info);
 
         }
 
-        this.saveBatch(list);
+        if (!list.isEmpty()) {
+            this.saveBatch(list);
+        }
     }
 
 

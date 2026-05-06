@@ -32,38 +32,45 @@
 								<view class="steps d-flex flex-column w-80">
 									<view class="steps__img-column">
 										<view class="steps__img-column-item">
-											<view class="iconfont-yshop icon-lamp"></view>
+											<view class="iconfont-yshop icon-lamp" :class="{ unactive: orderTimelineStep < 0 }"></view>
 										</view>
 										<view class="steps__img-column-item">
-											<view class="iconfont-yshop icon-daojishi" v-if="{active: order.paid == 1 && order.status == 0}"></view>
-											<view class="iconfont-yshop icon-daojishi unactive" v-else></view>
+											<view class="iconfont-yshop icon-daojishi" :class="{ unactive: orderTimelineStep < 1 }"></view>
 										</view>
 										<view class="steps__img-column-item" v-if="order.orderType == 'takeout'">
-											<view class="iconfont-yshop icon-takeout" v-if="order.status == 1"></view>
-											<view class="iconfont-yshop icon-takeout unactive" v-else></view>
+											<view class="iconfont-yshop icon-takeout" :class="{ unactive: orderTimelineStep < 2 }"></view>
 										</view>
-										<view class="steps__img-column-item" >
-											<view class="iconfont-yshop icon-doorbell" v-if="order.status >= 2"></view>
-											<view class="iconfont-yshop icon-doorbell unactive" v-else></view>
+										<view class="steps__img-column-item">
+											<view
+												class="iconfont-yshop icon-doorbell"
+												:class="{ unactive: orderTimelineStep < (order.orderType == 'takeout' ? 3 : 2) }"
+											></view>
 										</view>
 									</view>
 									<view class="steps__text-column">
-										<view class="steps__text-column-item active">
+										<view class="steps__text-column-item" :class="{ active: orderTimelineStep === 0 }">
 											<view class="steps__column-item-line bg-transparent"></view>
 											<view class="steps__text-column-item-text">已下单</view>
 											<view class="steps__column-item-line"></view>
 										</view>
-										<view class="steps__text-column-item activ"  :class="{active: order.paid == 1}">
+										<view class="steps__text-column-item" :class="{ active: orderTimelineStep === 1 }">
 											<view class="steps__column-item-line"></view>
 											<view class="steps__text-column-item-text">制作中</view>
 											<view class="steps__column-item-line"></view>
 										</view>
-										<view class="steps__text-column-item" :class="{active: order.status == 1}" v-if="order.orderType == 'takeout'">
+										<view
+											class="steps__text-column-item"
+											:class="{ active: orderTimelineStep === 2 }"
+											v-if="order.orderType == 'takeout'"
+										>
 											<view class="steps__column-item-line"></view>
 											<view class="steps__text-column-item-text">配送中</view>
 											<view class="steps__column-item-line bg-transparent"></view>
 										</view>
-										<view class="steps__text-column-item" :class="{active: order.status >= 2}">
+										<view
+											class="steps__text-column-item"
+											:class="{ active: orderTimelineStep === (order.orderType == 'takeout' ? 3 : 2) }"
+										>
 											<view class="steps__column-item-line"></view>
 											<view class="steps__text-column-item-text">
 												{{ order.orderType == 'takeout' ? '已送达' : '请取餐' }}
@@ -77,12 +84,12 @@
 							<view v-if="order.status==0 && order.paid > 0" class="d-flex just-content-center align-items-center font-size-base text-color-assist mb-40">
 								您前面还有 <text class="text-color-primary mr-10 ml-10">{{order.preNum}}</text> 单待制作
 							</view>
-							<!-- goods begin -->
-							<view class="w-100 d-flex flex-column position-relative mt-30" style="margin-bottom: -40rpx;">
+							<!-- goods：仅当接口返回 products 时展示（与 cartInfo 二选一避免重复/空白） -->
+							<view v-if="order.products && order.products.length" class="w-100 d-flex flex-column position-relative mt-30" style="margin-bottom: -40rpx;">
 								<view class="w-100 d-flex align-items-center mb-40" v-for="(good, index) in order.products" :key="index">
 									<view class="d-flex flex-column w-60 overflow-hidden">
 										<view class="font-size-lg text-color-base mb-10 text-truncate">{{ good.title }}</view>
-										<view class="font-size-sm text-color-assist text-truncate">{{ good.spec }}</view>
+										<view class="font-size-sm text-color-assist text-truncate">{{ formatProductSpecDisplay(good.spec) }}</view>
 									</view>
 									<view class="d-flex w-40 align-items-center justify-content-between pl-30">
 										<view class="font-size-base text-color-base">x{{ good.number }}</view>
@@ -90,7 +97,6 @@
 									</view>
 								</view>
 							</view>
-							<!-- goods end -->
 						</view>
 					</list-cell>
 				</view>
@@ -102,7 +108,7 @@
 								<image :src="good.image" mode="aspectFill" class="image"></image>
 								<view class="d-flex flex-column w-60 overflow-hidden">
 									<view class="font-size-lg text-color-base mb-10 text-truncate">{{ good.title }}</view>
-									<view class="font-size-sm text-color-assist text-truncate">{{ good.spec }}</view>
+									<view class="font-size-sm text-color-assist text-truncate">{{ formatProductSpecDisplay(good.spec) }}</view>
 								</view>
 								<view class="d-flex w-40 align-items-center justify-content-between pl-30">
 									<view class="font-size-base text-color-base">x{{ good.number }}</view>
@@ -191,11 +197,9 @@
 </template>
 
 <script setup>
-import {
-  ref
-} from 'vue'
-import { onLoad} from '@dcloudio/uni-app'
-import { formatDateTime } from '@/utils/util'
+import { ref, computed } from 'vue'
+import { onLoad, onShow } from '@dcloudio/uni-app'
+import { formatDateTime, formatProductSpecDisplay } from '@/utils/util'
 import {
   orderDetail,
   orderReceive,
@@ -206,15 +210,40 @@ const order = ref({
 	statusDto:{payType:''}
 })
 const numForMading = ref(5)
+const orderKey = ref('')
 
-onLoad((option) => {
-	detail(option.id);
+/**
+ * 与后端 order.status 一致：0待发货 1待收货 2已收货 3已完成；结合 paid、orderType 驱动时间轴高亮。
+ * 外卖：0已下单 1制作中 2配送中 3已送达；自取/堂食：0已下单 1制作中 2请取餐。
+ */
+const orderTimelineStep = computed(() => {
+	const o = order.value
+	if (!o) return 0
+	const paid = Number(o.paid) || 0
+	const st = Number(o.status)
+	const takeout = o.orderType === 'takeout'
+	if (paid <= 0) return 0
+	if (Number.isNaN(st) || st < 0) return 0
+	if (st === 0) return 1
+	if (st === 1) return 2
+	return takeout ? 3 : 2
 })
 
-const detail =  async(id) => {
-	let data = await orderDetail(id);
+onLoad((option) => {
+	orderKey.value = option.id || ''
+})
+
+onShow(() => {
+	if (orderKey.value) {
+		detail(orderKey.value)
+	}
+})
+
+const detail = async (id) => {
+	if (!id) return
+	const data = await orderDetail(id)
 	if (data) {
-		order.value = data;
+		order.value = data
 	}
 }
 const openLocation = () => {
@@ -239,10 +268,12 @@ const makePhoneCall = () =>{
 }
 
 // 确认收到货
-const receive  = async(order) => {
-	let data = await orderReceive({uni:order.orderId});
+const receive = async (row) => {
+	const uniId = row.orderId || orderKey.value
+	const data = await orderReceive({ uni: uniId })
 	if (data) {
-		await getOrders(true)
+		uni.showToast({ title: '已确认收到', icon: 'success' })
+		await detail(orderKey.value)
 	}
 }
 //提交退款

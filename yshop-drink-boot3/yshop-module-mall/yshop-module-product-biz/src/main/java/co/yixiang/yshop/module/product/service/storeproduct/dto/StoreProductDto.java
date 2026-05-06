@@ -38,8 +38,7 @@ public class StoreProductDto
     /** 商品图片 */
     private String image;
 
-    /** 轮播图 */
-    @NotNull(message = "轮播图不为空")
+    /** 轮播图（可为空） */
     @JsonProperty("slider_image")
     private List<String> sliderImage;
 
@@ -107,8 +106,7 @@ public class StoreProductDto
     @JsonProperty("is_new")
     private Integer isNew;
 
-    /** 商品描述 */
-    @NotBlank(message = "商品详情不能为空")
+    /** 商品描述（可为空） */
     private String description;
 
 

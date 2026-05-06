@@ -43,6 +43,12 @@ public class AppOrderParam implements Serializable {
     @Schema(description = "规格", required = true)
     private List<String> spec;
 
+    /**
+     * 与 spec 一一对应：非售价类可选说明（如辣度、甜度、冰量），仅用于展示与出单，不参与 SKU 匹配
+     */
+    @Schema(description = "规格附加说明（可选，与 spec 同序）", required = false)
+    private List<String> specAddon;
+
     @Schema(description = "数量", required = true)
     private List<String>  number;
 

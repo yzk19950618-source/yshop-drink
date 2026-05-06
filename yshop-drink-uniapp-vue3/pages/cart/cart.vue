@@ -16,7 +16,10 @@
 		   <view class="item" v-for="(item, index) in cart" :key="index">
 			<view class="left">
 			 <view class="name">{{ item.name }}</view>
-			 <view class="props">{{ item.valueStr }}</view>
+			 <view class="props">
+			 	<view class="props-line" v-if="!isTrivialProductSku(item.valueStr)">{{ item.valueStr }}</view>
+			 	<view v-if="item.specAddon" class="props-addon">{{ item.specAddon }}</view>
+			 </view>
 			</view>
 			<view class="center">
 			 <text>￥{{ item.price }}</text>
@@ -51,6 +54,7 @@ import {
 import { useMainStore } from '@/store/store'
 import { storeToRefs } from 'pinia'
 import { onLoad,onShow} from '@dcloudio/uni-app'
+import { isTrivialProductSku } from '@/utils/util'
 const main = useMainStore()
 const { orderType,address, store,location,isLogin } = storeToRefs(main)
 const title = ref('购物车')
@@ -214,9 +218,17 @@ const saveCartToStorage = () => {
 						.props {
 							color: $text-color-assist;
 							font-size: 24rpx;
-							overflow: hidden;
-							text-overflow: ellipsis;
-							white-space: nowrap;
+							.props-line {
+								overflow: hidden;
+								text-overflow: ellipsis;
+								white-space: nowrap;
+							}
+							.props-addon {
+								font-size: 22rpx;
+								margin-top: 6rpx;
+								line-height: 1.35;
+								white-space: normal;
+							}
 						}
 					}
 	

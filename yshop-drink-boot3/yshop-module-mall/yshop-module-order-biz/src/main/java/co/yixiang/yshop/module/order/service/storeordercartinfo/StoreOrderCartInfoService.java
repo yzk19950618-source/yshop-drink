@@ -22,7 +22,8 @@ public interface StoreOrderCartInfoService extends IService<StoreOrderCartInfoDO
      * @param numbers 商品数量
      * @param specs 商品规格
      */
-    void saveCartInfo(Long oid, String orderId,List<String> productIds,List<String> numbers,List<String> specs);
+    void saveCartInfo(Long oid, String orderId, List<String> productIds, List<String> numbers,
+                      List<String> specs, List<String> specAddons);
 
 
 

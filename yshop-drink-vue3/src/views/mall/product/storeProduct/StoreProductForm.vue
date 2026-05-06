@@ -72,6 +72,14 @@
         </el-form-item>
       </el-tab-pane>
       <el-tab-pane label="商品规格" name="two">
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px"
+          title="库存与辣度说明"
+          description="多规格时，保存校验的是下方表格里每一行的「库存」之和。若只填了「基本信息」里的库存、表格里仍为 0，保存前会自动把总库存平均分配到各行。辣度（放不放辣椒、微辣等）请勿做成多规格 SKU：请使用「单规格」商品，辣度由小程序全局字典 mall_drink_extra_* 配置，与库存/售价无关，全店商品默认可选。仅当规格真实影响价格或库存（如大份/小份）时再使用多规格。"
+        />
         <el-form-item label="商品规格" prop="spec_type">
           <el-radio-group v-model="formValidate.spec_type" @change="changeSpec">
             <el-radio :label="0">单规格</el-radio>
@@ -354,8 +362,6 @@ const oneFormValidate = ref([
 
 const formRules = reactive({
   shopId: [{ required: true, message: '请选择店铺', trigger: 'blur' }],
-  image: [{ required: true, message: '商品图片不能为空', trigger: 'blur' }],
-  slider_image: [{ required: true, message: '轮播图不能为空', trigger: 'blur' }],
   store_name: [{ required: true, message: '商品名称不能为空', trigger: 'blur' }],
   cate_id: [{ required: true, message: '分类id不能为空', trigger: 'blur' }],
   price: [{ required: true, message: '商品价格不能为空', trigger: 'blur' }]
@@ -497,6 +503,23 @@ const getList = async () => {
 
 /** 提交表单 */
 const emit = defineEmits(['success']) // 定义 success 事件，用于操作成功后的回调
+/** 多规格：若表格库存全为 0 且基本信息里有库存，则按总库存平均分配到各行 */
+const fillRowStocksFromMain = () => {
+  if (formValidate.value.spec_type !== 1) return
+  const rows = manyFormValidate.value
+  if (!rows || !rows.length) return
+  const total = parseInt(String(formValidate.value.stock), 10)
+  if (!total || total <= 0) return
+  const sum = rows.reduce((s, r) => s + (parseInt(String(r.stock), 10) || 0), 0)
+  if (sum > 0) return
+  const n = rows.length
+  const base = Math.floor(total / n)
+  let rem = total % n
+  rows.forEach((r, i) => {
+    r.stock = base + (i < rem ? 1 : 0)
+  })
+}
+
 const submitForm = async () => {
   // 校验表单
   if (!formRef) return 
@@ -522,7 +545,9 @@ const submitForm = async () => {
       }
       if(formValidate.value.spec_type === 1 && manyFormValidate.value.length===0){
         message.warning('请点击生成规格！');
+        return
       }
+      fillRowStocksFromMain()
       await StoreProductApi.createStoreProduct(formValidate.value)
     dialogVisible.value = false
     // 发送操作成功的事件
@@ -759,6 +784,7 @@ const generate = () => {
       });
       oneFormBatch.value[0].pic = formValidate.value.image;
     }
+    fillRowStocksFromMain()
   }).catch(res => {
    console.log('err:'+res)
   })

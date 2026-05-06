@@ -5,6 +5,39 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/modules/user'
 import { getAccessToken } from '@/utils/auth'
 
+/** 可选：将 `public/order-notify.mp3` 放入项目根 public 目录后自动播放；否则使用简短蜂鸣 */
+function playOrderNotifySound() {
+  try {
+    const src = `${import.meta.env.BASE_URL}order-notify.mp3`
+    const audio = new Audio(src)
+    audio.volume = 0.55
+    void audio.play().catch(() => playFallbackBeep())
+  } catch {
+    playFallbackBeep()
+  }
+}
+
+function playFallbackBeep() {
+  try {
+    const AC = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AC) return
+    const ctx = new AC()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.frequency.value = 880
+    gain.gain.value = 0.12
+    osc.start()
+    window.setTimeout(() => {
+      osc.stop()
+      void ctx.close()
+    }, 140)
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * 管理端登录后主布局内建立 `/infra/ws` 连接，解析门店订单等业务推送并弹出通知。
  */
@@ -64,6 +97,9 @@ export function useAdminWebSocket() {
         router.push({ name: 'StoreOrder', query: orderId ? { orderId } : {} })
       }
     })
+    if (event === 'created' || event === 'paid') {
+      playOrderNotifySound()
+    }
   }
 
   watch(data, (raw) => {
