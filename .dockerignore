@@ -1,0 +1,8 @@
+# 减小构建上下文、加快云托管上传（后端镜像不依赖前端目录）
+.git
+**/target/
+**/node_modules/
+**/dist/
+**/unpackage/
+yshop-drink-vue3
+yshop-drink-uniapp-vue3

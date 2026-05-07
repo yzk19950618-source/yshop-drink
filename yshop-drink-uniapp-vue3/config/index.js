@@ -1,5 +1,27 @@
-export const VUE_APP_API_URL = 'http://localhost:48081/app-api'
-//export const VUE_APP_API_URL = 'https://apidc.yixiang.co/app-api'
+/**
+ * 微信小程序内 localhost 指向手机/模拟器自身，无法访问开发机后端。
+ * 请把 MP_LAN_HOST 改成与你电脑 ipconfig 中 IPv4 一致（须与微信开发者工具里 ws 尝试连接的网段一致）。
+ */
+const MP_LAN_HOST = 'http://10.141.242.50:48081'
+
+function resolveApiHost() {
+  try {
+    if (typeof uni !== 'undefined' && uni.getSystemInfoSync) {
+      const { uniPlatform } = uni.getSystemInfoSync()
+      if (uniPlatform === 'mp-weixin') {
+        return MP_LAN_HOST
+      }
+    }
+  } catch (_) {
+    /* non-uni context */
+  }
+  return 'http://localhost:48081'
+}
+
+const API_HOST = resolveApiHost()
+
+export const VUE_APP_API_URL = API_HOST + '/app-api'
+// export const VUE_APP_API_URL = 'https://apidc.yixiang.co/app-api'
 export const VUE_APP_RESOURCES_URL = 'https://h5.yixiang.co/static'
 export const VUE_APP_UPLOAD_URL = VUE_APP_API_URL + '/infra/file/upload'
 export const APP_ID = 'wxdbdbc123c8c30b45'
